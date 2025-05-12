@@ -1,0 +1,332 @@
+let numSlider;
+let redMagInputs = [], redAngleInputs = [];
+let yellowMagInputs = [], yellowAngleInputs = [];
+let setButton, playButton;
+
+let redVecs = [], yellowVecs = [];
+let numStickmen = 1;
+let ropeMidOffset = 0;
+let showResult = false;
+
+function setup() {
+  createCanvas(1000, 600);
+  textSize(14);
+
+  createSpan('Number of Stickmen per Team:').position(20, 10);
+  numSlider = createSlider(1, 5, 1, 1);
+  numSlider.position(200, 10);
+  numSlider.input(generateInputs);
+
+  setButton = createButton("Set Vectors");
+  setButton.position(400, 10);
+  setButton.mousePressed(setVectors);
+
+  playButton = createButton("Play");
+  playButton.position(500, 10);
+  playButton.mousePressed(() => showResult = true);
+
+  generateInputs(); // Initial inputs
+}
+
+function generateInputs() {
+  // Remove old inputs
+  redMagInputs.forEach(i => i.remove());
+  redAngleInputs.forEach(i => i.remove());
+  yellowMagInputs.forEach(i => i.remove());
+  yellowAngleInputs.forEach(i => i.remove());
+
+  redMagInputs = [], redAngleInputs = [];
+  yellowMagInputs = [], yellowAngleInputs = [];
+
+  numStickmen = numSlider.value();
+
+  for (let i = 0; i < numStickmen; i++) {
+    let y = 40 + i * 30;
+
+    createSpan(`Red #${i + 1} Mag:`).position(20, y);
+    let rMag = createInput('50'); rMag.position(100, y); redMagInputs.push(rMag);
+    createSpan(`Angle:`).position(160, y);
+    let rAng = createInput('0'); rAng.position(210, y); redAngleInputs.push(rAng);
+
+    createSpan(`Yellow #${i + 1} Mag:`).position(600, y);
+    let yMag = createInput('50'); yMag.position(700, y); yellowMagInputs.push(yMag);
+    createSpan(`Angle:`).position(760, y);
+    let yAng = createInput('180'); yAng.position(810, y); yellowAngleInputs.push(yAng);
+  }
+}
+
+function setVectors() {
+  redVecs = [];
+  yellowVecs = [];
+
+  for (let i = 0; i < numStickmen; i++) {
+    let redMag = float(redMagInputs[i].value());
+    let redAngle = radians(float(redAngleInputs[i].value()));
+    let yellowMag = float(yellowMagInputs[i].value());
+    let yellowAngle = radians(float(yellowAngleInputs[i].value()));
+
+    redVecs.push(p5.Vector.fromAngle(redAngle).setMag(redMag));
+    yellowVecs.push(p5.Vector.fromAngle(yellowAngle).setMag(yellowMag));
+  }
+
+  ropeMidOffset = 0;
+  showResult = false;
+}
+
+function draw() {
+  background(240);
+  let baseY = 400;
+  let spacing = 100;
+
+  stroke(0);
+  line(0, baseY + 60, width, baseY + 60); // Ground
+
+  for (let i = 0; i < numStickmen; i++) {
+    let redX = 100 + i * spacing;
+    let yellowX = 100 + i * spacing;
+
+    drawStickman(redX, baseY, 'red');
+    if (redVecs[i]) drawVector(redX + 15, baseY - 30, redVecs[i], 'red');
+
+    drawStickman(width - yellowX, baseY, 'yellow');
+    if (yellowVecs[i]) drawVector(width - yellowX + 15, baseY - 30, yellowVecs[i], 'orange');
+  }
+
+  // Rope visualization
+  let ropeStart = createVector(100 + (numStickmen - 1) * spacing / 2 + 25, baseY - 30);
+  let ropeEnd = createVector(width - (100 + (numStickmen - 1) * spacing / 2) + 25, baseY - 30);
+  let ropeMidY = (ropeStart.y + ropeEnd.y) / 2 + abs(ropeMidOffset * 0.3);
+
+  stroke('brown');
+  strokeWeight(6);
+  noFill();
+  bezier(
+    ropeStart.x, ropeStart.y,
+    ropeStart.x + 100, ropeMidY + 50,
+    ropeEnd.x - 100, ropeMidY + 50,
+    ropeEnd.x, ropeEnd.y
+  );
+
+  if (showResult) {
+    let totalRed = createVector(0, 0);
+    let totalYellow = createVector(0, 0);
+    for (let i = 0; i < numStickmen; i++) {
+      totalRed.add(redVecs[i]);
+      totalYellow.add(yellowVecs[i]);
+    }
+
+    let resultVec = p5.Vector.add(totalRed, totalYellow);
+    ropeMidOffset = constrain(resultVec.x * 0.2, -120, 120);
+
+    let angle = degrees(resultVec.heading()).toFixed(2);
+    let mag = resultVec.mag().toFixed(2);
+    fill(0);
+    noStroke();
+    textAlign(CENTER);
+    text(`Resultant Force → Magnitude: ${mag}, Angle: ${angle}°`, width / 2, height - 20);
+
+    // 🏁 Draw the Victory Line
+    let midX = (ropeStart.x + ropeEnd.x) / 2;
+    let victoryX = midX + ropeMidOffset;
+
+    strokeWeight(4);
+    stroke('green');
+    line(victoryX, baseY - 60, victoryX, baseY + 60);
+    noStroke();
+    fill('green');
+    textAlign(CENTER);
+    text("Victory Line", victoryX, baseY - 70);
+
+    // 🏆 Show winner text
+    textSize(18);
+    fill(resultVec.x > 0 ? 'red' : resultVec.x < 0 ? 'orange' : 'gray');
+    let winner = resultVec.x > 0 ? "Red Team Wins!" : resultVec.x < 0 ? "Yellow Team Wins!" : "It's a Tie!";
+    text(winner, width / 2, 40);
+    textSize(14); // Reset text size
+  }
+}
+
+function drawStickman(x, y, col) {
+  stroke(0);
+  strokeWeight(2);
+  fill(col);
+  ellipse(x, y - 60, 30); // Head
+  line(x, y - 45, x, y); // Body
+  line(x, y - 30, x - 20, y - 10); // Left Arm
+  line(x, y - 30, x + 20, y - 10); // Right Arm
+  line(x, y, x - 15, y + 30); // Left Leg
+  line(x, y, x + 15, y + 30); // Right Leg
+}
+
+function drawVector(x, y, vec, col) {
+  push();
+  stroke(col);
+  strokeWeight(3);
+  fill(col);
+  translate(x, y);
+  line(0, 0, vec.x, vec.y);
+  rotate(vec.heading());
+  let arrowSize = 7;
+  translate(vec.mag() - arrowSize, 0);
+  triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
+  pop();
+}
+
+
+
+
+
+
+**************************************************************************************************************************************
+
+
+
+let numSlider;
+let redAngleInput, redMagInput;
+let yellowAngleInput, yellowMagInput;
+let setButton, playButton;
+
+let redVecs = [], yellowVecs = [];
+let numStickmen = 1;
+let ropeMidOffset = 0;
+let showResult = false;
+
+function setup() {
+  createCanvas(1000, 600);
+  textSize(14);
+
+  // Red Team Inputs
+  redMagInput = createInput('50');
+  redMagInput.position(100, 40);
+  redAngleInput = createInput('0');
+  redAngleInput.position(100, 70);
+  createSpan('Red Team Mag & Angle').position(100, 10);
+
+  // Yellow Team Inputs
+  yellowMagInput = createInput('50');
+  yellowMagInput.position(width - 200, 40);
+  yellowAngleInput = createInput('180');
+  yellowAngleInput.position(width - 200, 70);
+  createSpan('Yellow Team Mag & Angle').position(width - 200, 10);
+
+  // Slider for number of stickmen
+  createSpan('Number of Stickmen per Team:').position(width/2 - 130, 10);
+  numSlider = createSlider(1, 5, 1, 1);
+  numSlider.position(width / 2 - 80, 30);
+
+  // Buttons
+  setButton = createButton("Set Vectors");
+  setButton.position(width / 2 - 60, 60);
+  setButton.mousePressed(setVectors);
+
+  playButton = createButton("Play");
+  playButton.position(width / 2 + 40, 60);
+  playButton.mousePressed(() => showResult = true);
+}
+
+function draw() {
+  background(240);
+  let groundY = 500;
+
+  stroke(0);
+  line(0, groundY, width, groundY); // ground line
+
+  numStickmen = numSlider.value();
+
+  let redX = 150;
+  let yellowX = width - 150;
+  let spacing = 60;
+
+  // Draw Red Team
+  for (let i = 0; i < numStickmen; i++) {
+    let y = groundY - i * spacing;
+    drawStickman(redX, y, 'red');
+    if (redVecs[i]) drawVector(redX + 15, y - 30, redVecs[i], 'red');
+  }
+
+  // Draw Yellow Team
+  for (let i = 0; i < numStickmen; i++) {
+    let y = groundY - i * spacing;
+    drawStickman(yellowX, y, 'yellow');
+    if (yellowVecs[i]) drawVector(yellowX + 15, y - 30, yellowVecs[i], 'orange');
+  }
+
+  // Rope Simulation
+  let ropeStart = createVector(redX + 25, groundY - (numStickmen - 1) * spacing / 2 - 30);
+  let ropeEnd = createVector(yellowX + 25, groundY - (numStickmen - 1) * spacing / 2 - 30);
+  let ropeMidX = (ropeStart.x + ropeEnd.x) / 2 + ropeMidOffset;
+  let ropeMidY = (ropeStart.y + ropeEnd.y) / 2 + abs(ropeMidOffset * 0.3);
+
+  stroke('brown');
+  strokeWeight(6);
+  noFill();
+  bezier(
+    ropeStart.x, ropeStart.y,
+    ropeStart.x + 100, ropeStart.y + 50,
+    ropeEnd.x - 100, ropeEnd.y + 50,
+    ropeEnd.x, ropeEnd.y
+  );
+
+  if (showResult) {
+    let totalRed = createVector(0, 0);
+    let totalYellow = createVector(0, 0);
+    for (let i = 0; i < numStickmen; i++) {
+      totalRed.add(redVecs[i]);
+      totalYellow.add(yellowVecs[i]);
+    }
+
+    let resultVec = p5.Vector.add(totalRed, totalYellow); // Net tug
+    ropeMidOffset = constrain(resultVec.x * 0.2, -120, 120); // Move rope
+
+    let angle = degrees(resultVec.heading()).toFixed(2);
+    let mag = resultVec.mag().toFixed(2);
+    fill(0);
+    noStroke();
+    textAlign(CENTER);
+    text(`Resultant Force → Magnitude: ${mag}, Angle: ${angle}°`, width / 2, height - 20);
+  }
+}
+
+function setVectors() {
+  redVecs = [];
+  yellowVecs = [];
+
+  let redMag = float(redMagInput.value());
+  let redAngle = radians(float(redAngleInput.value()));
+  let yellowMag = float(yellowMagInput.value());
+  let yellowAngle = radians(float(yellowAngleInput.value()));
+
+  for (let i = 0; i < numStickmen; i++) {
+    redVecs.push(p5.Vector.fromAngle(redAngle).setMag(redMag));
+    yellowVecs.push(p5.Vector.fromAngle(yellowAngle).setMag(yellowMag));
+  }
+
+  ropeMidOffset = 0;
+  showResult = false;
+}
+
+function drawStickman(x, y, col) {
+  stroke(0);
+  strokeWeight(2);
+  fill(col);
+  ellipse(x, y - 60, 30); // Head
+  line(x, y - 45, x, y); // Body
+  line(x, y - 30, x - 20, y - 10); // Left Arm
+  line(x, y - 30, x + 20, y - 10); // Right Arm
+  line(x, y, x - 15, y + 30); // Left Leg
+  line(x, y, x + 15, y + 30); // Right Leg
+}
+
+function drawVector(x, y, vec, col) {
+  push();
+  stroke(col);
+  strokeWeight(3);
+  fill(col);
+  translate(x, y);
+  line(0, 0, vec.x, vec.y);
+  rotate(vec.heading());
+  let arrowSize = 7;
+  translate(vec.mag() - arrowSize, 0);
+  triangle(0, arrowSize / 2, 0, -arrowSize / 2, arrowSize, 0);
+  pop();
+}
