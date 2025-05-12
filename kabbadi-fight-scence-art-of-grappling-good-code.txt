@@ -1,0 +1,181 @@
+// Smooth Kabaddi Simulation with Continuous Movement Controls (p5.js)
+let teams = { red: [], blue: [] };
+let currentTeam = 'red';
+let raider = null;
+let goRaidBtn, grappleBtn, turnBtn;
+let scores = { red: 0, blue: 0 };
+let scoreP, msgP;
+
+function setup() {
+  createCanvas(800, 400);
+  // Initialize 7 players per team
+  for (let i = 0; i < 7; i++) {
+    teams.red.push(new Player(100, 50 + i * 50, 'red'));
+    teams.blue.push(new Player(width - 100, 50 + i * 50, 'blue'));
+  }
+  // Buttons
+  goRaidBtn = createButton('Start Raid');
+  goRaidBtn.position(20, height + 20);
+  goRaidBtn.mousePressed(startRaid);
+
+  grappleBtn = createButton('Group Grapple');
+  grappleBtn.position(120, height + 20);
+  grappleBtn.mousePressed(groupGrapple);
+
+  turnBtn = createButton('End Turn');
+  turnBtn.position(260, height + 20);
+  turnBtn.mousePressed(endTurnManual);
+
+  scoreP = createP(); scoreP.position(20, height + 50);
+  msgP = createP(); msgP.position(20, height + 80);
+  updateScoreDisplay();
+}
+
+function draw() {
+  background(245);
+  drawCenterLine();
+
+  // Continuous movement keys for raider
+  if (raider) {
+    let step = 3;
+    if (keyIsDown(LEFT_ARROW)) raider.x -= step;
+    if (keyIsDown(RIGHT_ARROW)) raider.x += step;
+    if (keyIsDown(UP_ARROW)) raider.y -= step;
+    if (keyIsDown(DOWN_ARROW)) raider.y += step;
+  }
+
+  // Draw players
+  for (let p of [...teams.red, ...teams.blue]) {
+    p.show();
+  }
+
+  // Highlight current raider
+  if (raider) raider.highlight();
+}
+
+function drawCenterLine() {
+  stroke(0); strokeWeight(2);
+  line(width/2, 0, width/2, height);
+  noStroke();
+}
+
+function keyPressed() {
+  if (!raider) return;
+  // Tagging: 'A' = hand tag, 'D' = leg tag
+  if (key === 'a' || key === 'A') handleTag('Hand');
+  if (key === 'd' || key === 'D') handleTag('Leg');
+}
+
+function handleTag(type) {
+  let opponents = teams[currentTeam === 'red' ? 'blue' : 'red'];
+  let hit = false;
+  for (let opp of opponents) {
+    if (!opp.tagged && raider.overlaps(opp)) {
+      opp.tagged = true;
+      scores[currentTeam]++;
+      msgP.html(`Valid ${type} Tag! +1 point to ${currentTeam}`);
+      hit = true;
+    }
+  }
+  if (!hit) {
+    msgP.html(`Invalid ${type} Tag! No opponent in range.`);
+  }
+  updateScoreDisplay();
+}
+
+function mousePressed() {
+  // enable dragging if click on raider
+  if (raider && raider.contains(mouseX, mouseY)) raider.startDrag();
+}
+
+function mouseDragged() {
+  if (raider && raider.dragging) raider.dragTo(mouseX, mouseY);
+}
+
+function mouseReleased() {
+  if (raider && raider.dragging) raider.stopDrag();
+}
+
+function startRaid() {
+  pickRaider();
+  msgP.html(`${currentTeam} team raider in play.`);
+}
+
+function groupGrapple() {
+  if (!raider) return;
+  let opponents = teams[currentTeam === 'red' ? 'blue' : 'red'];
+  let any = 0;
+  opponents.forEach(opp => {
+    let d = dist(raider.x, raider.y, opp.x, opp.y);
+    if (!opp.tagged && d < 100) {
+      opp.tagged = true;
+      opp.x = raider.x + random(-20, 20);
+      opp.y = raider.y + random(-20, 20);
+      scores[currentTeam]++;
+      any++;
+    }
+  });
+  msgP.html(any ? `Group Grapple! +${any} points` : 'No opponents in range.');
+  updateScoreDisplay();
+}
+
+function endTurn() {
+  currentTeam = currentTeam === 'red' ? 'blue' : 'red';
+  raider = null;
+  msgP.html(`${currentTeam} team turn.`);
+}
+
+// Manual via button
+function endTurnManual() { endTurn(); }
+
+function pickRaider() {
+  raider = teams[currentTeam].find(p => !p.tagged) || null;
+}
+
+function updateScoreDisplay() {
+  scoreP.html(`Scores → Red: ${scores.red} | Blue: ${scores.blue}`);
+}
+
+class Player {
+  constructor(x, y, team) {
+    this.x = x; this.y = y; this.r = 20;
+    this.team = team; this.tagged = false;
+    this.dragging = false; this.offsetX = 0; this.offsetY = 0;
+  }
+  show() {
+    push(); translate(this.x, this.y);
+    stroke(0); strokeWeight(2);
+    fill(this.team === 'red' ? (this.tagged ? '#faa' : '#f55')
+         : (this.tagged ? '#aaf' : '#55f'));
+    ellipse(0, 0, this.r * 1.5);
+    line(0, this.r * 0.75, 0, this.r * 2);
+    line(0, this.r * 2, -this.r, this.r * 3);
+    line(0, this.r * 2, this.r, this.r * 3);
+    line(0, this.r, -this.r, this.r / 2);
+    line(0, this.r, this.r, this.r / 2);
+    pop();
+  }
+  highlight() {
+    noFill(); strokeWeight(3); stroke(0, 200, 0);
+    ellipse(this.x, this.y, this.r * 2 + 10);
+    noStroke();
+  }
+  contains(px, py) {
+    return dist(px, py, this.x, this.y) < this.r * 1.2;
+  }
+  startDrag() {
+    this.dragging = true;
+    this.offsetX = this.x - mouseX;
+    this.offsetY = this.y - mouseY;
+  }
+  dragTo(px, py) {
+    this.x = px + this.offsetX;
+    this.y = py + this.offsetY;
+  }
+  stopDrag() {
+    this.dragging = false;
+  }
+  overlaps(other) {
+    return dist(this.x, this.y, other.x, other.y) < (this.r + other.r) * 0.8;
+  }
+}
